@@ -54,8 +54,7 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 }
 
 static void new_frame(void *data) {
-  qr_size = gen_qr("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                   &cells);
+  qr_size = gen_qr("a", &cells);
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Return: %i", qr_size);
   layer_mark_dirty(s_layer);
 }
