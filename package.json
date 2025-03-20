@@ -1,0 +1,42 @@
+{
+  "name": "QR Display",
+  "author": "Flynn Duniho",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "dependencies": {
+    "pebble-clay": "^1.0.1"
+  },
+  "pebble": {
+    "capabilities": [
+      "configurable"
+    ],
+    "displayName": "QR",
+    "uuid": "28ff10ba-17a6-4ce8-a2d7-012ae0b4b116",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "STRING_1"
+    ],
+    "resources": {
+      "media": [
+        {
+          "file": "images/face.png",
+          "menuIcon": true,
+          "name": "MENU_ICON",
+          "type": "bitmap"
+        }
+      ]
+    }
+  }
+}
