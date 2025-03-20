@@ -40,7 +40,7 @@ uint8_t gen_qr(char *str, uint8_t **cells) {
     // 0b--------5678----
     data[1] = (str_len << 4) & 0xF0;
   }
-  for (size_t i = 0; i < str_len + 1; i++) {
+  for (size_t i = 0; i < str_len; i++) {
     data[i + char_count_len] |= (str[i] >> 4 & 0x0F);
     data[i + char_count_len + 1] = (str[i] << 4) & 0xF0;
   }
@@ -341,8 +341,8 @@ uint16_t eval_board(uint8_t *cells, uint8_t size) {
     }
   }
 
-  uint16_t pattern1 = 0b1011010000;
-  uint16_t pattern2 = 0b0000101101;
+  uint16_t pattern1 = 0b10111010000;
+  uint16_t pattern2 = 0b00001011101;
   for (uint8_t y = 0; y < size; y++) {
     for (uint8_t x = 0; x < size - 11; x++) {
       uint16_t curr_pattern = 0;
@@ -486,7 +486,7 @@ uint8_t *poly_divide(uint8_t *dividend, uint8_t dividend_len, uint8_t *divisor,
   memcpy(rest, dividend, dividend_len);
   for (uint8_t count = 0; count < quotientLength; count++) {
     // If the first term is 0, we can just skip this iteration
-    if (rest[0]) {
+    if (rest[rest_start]) {
       uint8_t factor = divide(rest[0], divisor[0]);
       uint8_t *subtr = poly_multiply(divisor, divisor_len, &factor, 1);
       for (uint8_t i = ++rest_start; i < dividend_len; i++) {
