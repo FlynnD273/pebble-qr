@@ -26,7 +26,10 @@
       "watchface": false
     },
     "messageKeys": [
-      "STRING_1"
+      "STRING_0",
+      "STRING_1",
+      "STRING_2",
+      "STRING_3"
     ],
     "resources": {
       "media": [

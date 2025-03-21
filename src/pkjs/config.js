@@ -11,11 +11,29 @@ module.exports = [
         "defaultValue": "QR Code Strings"
       },
       {
-        "type": "text",
+        "type": "input",
+        "messageKey": "STRING_0",
+        "label": "Option 1",
+        "defaultValue": "Hello, world!"
+      },
+      {
+        "type": "input",
         "messageKey": "STRING_1",
-        "label": "String 1",
-        "defaultValue": "Message 1"
-      }
+        "label": "Option 2",
+        "defaultValue": ""
+      },
+      {
+        "type": "input",
+        "messageKey": "STRING_2",
+        "label": "Option 3",
+        "defaultValue": ""
+      },
+      {
+        "type": "input",
+        "messageKey": "STRING_3",
+        "label": "Option 4",
+        "defaultValue": ""
+      },
     ]
   },
   {
