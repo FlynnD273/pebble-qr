@@ -26,7 +26,7 @@ uint8_t get_char_count(uint8_t size);
 uint8_t multiply(uint8_t a, uint8_t b);
 uint8_t divide(uint8_t a, uint8_t b);
 array poly_multiply(array a, array b);
-array poly_divide(array a, array b);
+array get_remainder(array a, array b);
 array get_generator_poly(uint8_t degree);
 array get_ec(array data, uint8_t total_codewords);
 array interleave(array data, array *group1, array *group2, uint8_t version_idx);
