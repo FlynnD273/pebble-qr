@@ -36,6 +36,7 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   graphics_draw_rect(ctx, GRect(offset_x - module_size, offset_y - module_size,
                                 (cells.size + 2) * module_size,
                                 (cells.size + 2) * module_size));
+
   for (uint8_t y = 0; y < cells.size; y++) {
     for (uint8_t x = 0; x < cells.size; x++) {
       if (shift == 0) {
@@ -54,10 +55,8 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 }
 
 static void new_frame(void *data) {
-  gen_qr("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-         "aaaaaaaaaaaaaaaaaaaaa",
-         &cells);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Return: %i", cells.size);
+  cells = gen_qr("~");
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "QR size: %i", cells.size);
   layer_mark_dirty(s_layer);
 }
 

@@ -16,9 +16,11 @@ typedef struct point {
  * https://www.thonky.com/qr-code-tutorial/
  * https://dev.to/maxart2501/let-s-develop-a-qr-code-generator-part-iii-error-correction-1kbm
  */
-void gen_qr(char *str, array *cells);
+array gen_qr(char *str);
 uint8_t idx_to_size(uint8_t size);
 uint8_t get_version_idx(size_t str_len);
+array new_array(size_t len, uint8_t size);
+array free_array(array arr);
 
 uint8_t get_char_count(uint8_t size);
 uint8_t multiply(uint8_t a, uint8_t b);
