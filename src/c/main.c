@@ -30,10 +30,11 @@ static void default_settings() {
   for (uint8_t i = 0; i < NUM_BUFS; i++) {
     strncpy(settings.strings[i], "", BUF_LEN);
   }
-  strncpy(settings.strings[0], "Hello, world!", BUF_LEN);
-  strncpy(settings.strings[1], "Hello world", BUF_LEN);
+  strncpy(settings.strings[0], "This is the first QR code", BUF_LEN);
+  strncpy(settings.strings[1], "This is the second", BUF_LEN);
+  strncpy(settings.strings[2], "And this, the third", BUF_LEN);
   settings.idx = 0;
-  settings.num_strings = 2;
+  settings.num_strings = 3;
 }
 
 static void frame_redraw(Layer *layer, GContext *ctx) {
@@ -53,23 +54,47 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
       MIN(width / (qr_code.size + 2), height / (qr_code.size + 2));
 
 #ifdef PBL_ROUND
-  module_size = module_size * 707 / 1000;
+  module_size = width * 707 / 1000 / (qr_code.size + 2);
 #endif
   uint8_t offset_x = (width - module_size * qr_code.size) / 2;
   uint8_t offset_y = (height - module_size * qr_code.size) / 2;
 
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorBlack);
+#ifdef PBL_RECT
   graphics_fill_rect(ctx,
                      GRect((idx - 1) * width / settings.num_strings, 0,
-                           width / settings.num_strings, offset_y / 4),
+                           width / settings.num_strings, module_size / 2),
                      0, 0);
   graphics_context_set_stroke_width(ctx, 2);
   for (uint8_t i = 1; i < settings.num_strings; i++) {
     graphics_draw_line(
         ctx, GPoint(i * width / settings.num_strings, 0),
-        GPoint(i * width / settings.num_strings, offset_y / 4 - 2));
+        GPoint(i * width / settings.num_strings, module_size / 2 - 2));
   }
+#else
+  uint8_t thickness = module_size;
+  graphics_context_set_stroke_width(ctx, thickness);
+  graphics_draw_arc(ctx, GRect(thickness / 2, height / 2, width - thickness, 1),
+                    GOvalScaleModeFillCircle,
+                    (idx - 1) * TRIG_MAX_ANGLE / settings.num_strings / 2 -
+                        TRIG_MAX_ANGLE / 4,
+                    idx * TRIG_MAX_ANGLE / settings.num_strings / 2 -
+                        TRIG_MAX_ANGLE / 4);
+  graphics_context_set_stroke_width(ctx, 2);
+  for (uint8_t i = 0; i <= settings.num_strings; i++) {
+    int16_t sx = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+                 width / 2 / TRIG_MAX_RATIO;
+    int16_t sy = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+                 width / 2 / TRIG_MAX_RATIO;
+    int16_t ex = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+                 (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
+    int16_t ey = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+                 (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
+    graphics_draw_line(ctx, GPoint(sx + width / 2, sy + height / 2),
+                       GPoint(ex + width / 2, ey + height / 2));
+  }
+#endif
 
   for (uint8_t y = 0; y < qr_code.size; y++) {
     for (uint8_t x = 0; x < qr_code.size; x++) {
