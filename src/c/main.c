@@ -14,9 +14,7 @@ static Layer *s_layer;
 static int width;
 static int height;
 
-static int qr_size;
-
-static uint8_t *cells;
+static array cells;
 
 static void default_settings() {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Defaults");
@@ -29,33 +27,37 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   size_t i = 0;
   uint8_t val = 0;
   uint8_t shift = 0;
-  uint8_t cell_size = MIN(width / (qr_size + 2), height / (qr_size + 2));
-  uint8_t offset_x = (width - cell_size * qr_size) / 2;
-  uint8_t offset_y = (height - cell_size * qr_size) / 2;
+  uint8_t module_size =
+      MIN(width / (cells.size + 2), height / (cells.size + 2));
+  uint8_t offset_x = (width - module_size * cells.size) / 2;
+  uint8_t offset_y = (height - module_size * cells.size) / 2;
   graphics_context_set_stroke_width(ctx, 2);
   graphics_context_set_stroke_color(ctx, GColorBlack);
-  graphics_draw_rect(ctx, GRect(offset_x - cell_size, offset_y - cell_size,
-                                (qr_size + 2) * cell_size,
-                                (qr_size + 2) * cell_size));
-  for (int y = 0; y < qr_size; y++) {
-    for (int x = 0; x < qr_size; x++) {
+  graphics_draw_rect(ctx, GRect(offset_x - module_size, offset_y - module_size,
+                                (cells.size + 2) * module_size,
+                                (cells.size + 2) * module_size));
+  for (uint8_t y = 0; y < cells.size; y++) {
+    for (uint8_t x = 0; x < cells.size; x++) {
       if (shift == 0) {
-        val = cells[i++];
+        val = cells.data[i++];
         shift = 8;
       }
       graphics_context_set_fill_color(
           ctx, ((val >> --shift) & 1) ? GColorBlack : GColorWhite);
       graphics_fill_rect(ctx,
-                         GRect(x * cell_size + offset_x,
-                               y * cell_size + offset_y, cell_size, cell_size),
+                         GRect(x * module_size + offset_x,
+                               y * module_size + offset_y, module_size,
+                               module_size),
                          0, 0);
     }
   }
 }
 
 static void new_frame(void *data) {
-  qr_size = gen_qr("a", &cells);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Return: %i", qr_size);
+  gen_qr("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+         "aaaaaaaaaaaaaaaaaaaaa",
+         &cells);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Return: %i", cells.size);
   layer_mark_dirty(s_layer);
 }
 
