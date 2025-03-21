@@ -1,10 +1,13 @@
+#include "qrcode.h"
+
 #include "qr.h"
 #include <pebble.h>
 
 #define SETTINGS_KEY 1
+#define BUF_LEN 1024
 
 typedef struct ClaySettings {
-  char *string1;
+  char string1[BUF_LEN];
 } ClaySettings;
 
 static ClaySettings settings;
@@ -14,33 +17,34 @@ static Layer *s_layer;
 static int width;
 static int height;
 
-static array cells;
+static QRCode qr_code;
+static uint8_t *qr_data;
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static void default_settings() {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Defaults");
-  settings.string1 = (char *)malloc(13);
-  strcpy(settings.string1, "Hello, world");
+  strncpy(settings.string1, "Hello, world!", BUF_LEN);
 }
 
 static void frame_redraw(Layer *layer, GContext *ctx) {
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "REDRAW");
   size_t i = 0;
   uint8_t val = 0;
   uint8_t shift = 0;
   uint8_t module_size =
-      MIN(width / (cells.size + 2), height / (cells.size + 2));
-  uint8_t offset_x = (width - module_size * cells.size) / 2;
-  uint8_t offset_y = (height - module_size * cells.size) / 2;
+      MIN(width / (qr_code.size + 2), height / (qr_code.size + 2));
+  uint8_t offset_x = (width - module_size * qr_code.size) / 2;
+  uint8_t offset_y = (height - module_size * qr_code.size) / 2;
   graphics_context_set_stroke_width(ctx, 2);
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_draw_rect(ctx, GRect(offset_x - module_size, offset_y - module_size,
-                                (cells.size + 2) * module_size,
-                                (cells.size + 2) * module_size));
+                                (qr_code.size + 2) * module_size,
+                                (qr_code.size + 2) * module_size));
 
-  for (uint8_t y = 0; y < cells.size; y++) {
-    for (uint8_t x = 0; x < cells.size; x++) {
+  for (uint8_t y = 0; y < qr_code.size; y++) {
+    for (uint8_t x = 0; x < qr_code.size; x++) {
       if (shift == 0) {
-        val = cells.data[i++];
+        val = qr_code.modules[i++];
         shift = 8;
       }
       graphics_context_set_fill_color(
@@ -55,8 +59,10 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 }
 
 static void new_frame(void *data) {
-  cells = gen_qr("~");
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "QR size: %i", cells.size);
+  uint8_t version = qr_get_version(strlen(settings.string1));
+  qr_data = (uint8_t *)calloc(qrcode_getBufferSize(version), 1);
+  qrcode_initText(&qr_code, qr_data, version, 0, settings.string1);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "QR size: %i", qr_code.size);
   layer_mark_dirty(s_layer);
 }
 
@@ -91,7 +97,7 @@ static void save_settings() {
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *string1_t = dict_find(iter, MESSAGE_KEY_STRING_1);
   if (string1_t) {
-    settings.string1 = string1_t->value->cstring;
+    strncpy(settings.string1, string1_t->value->cstring, BUF_LEN);
   }
   save_settings();
 }
