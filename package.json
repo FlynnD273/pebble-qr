@@ -1,7 +1,7 @@
 {
   "name": "QR Display",
   "author": "Flynn Duniho",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "keywords": [
     "pebble-app"
   ],
@@ -38,6 +38,11 @@
           "menuIcon": true,
           "name": "MENU_ICON",
           "type": "bitmap"
+        },
+        {
+          "file": "PDC/error.pdc",
+          "name": "ERROR",
+          "type": "raw"
         }
       ]
     }

@@ -14,19 +14,19 @@ module.exports = [
         "type": "input",
         "messageKey": "STRING_0",
         "label": "Option 1",
-        "defaultValue": "Hello, world!"
+        "defaultValue": "https://github.com/flynnD273/pebble-qr"
       },
       {
         "type": "input",
         "messageKey": "STRING_1",
         "label": "Option 2",
-        "defaultValue": ""
+        "defaultValue": "This is the second QR code"
       },
       {
         "type": "input",
         "messageKey": "STRING_2",
         "label": "Option 3",
-        "defaultValue": ""
+        "defaultValue": "And this, the third"
       },
       {
         "type": "input",
