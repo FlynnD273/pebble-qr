@@ -18,6 +18,7 @@ static ClaySettings settings;
 
 static Window *s_main_window;
 static Layer *s_layer;
+static TextLayer *s_text_layer;
 static int width;
 static int height;
 
@@ -25,6 +26,8 @@ static const QRCode EMPTY_QR;
 static QRCode qr_code;
 static uint8_t *qr_data = NULL;
 static GDrawCommandImage *error_image;
+static char error_text[] = "No QR code to display";
+static char blank_text[] = "";
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -44,8 +47,10 @@ static void default_settings() {
 static void frame_redraw(Layer *layer, GContext *ctx) {
   if (!qr_data) {
     gdraw_command_image_draw(ctx, error_image, GPoint(0, 0));
+    text_layer_set_text(s_text_layer, error_text);
     return;
   }
+  text_layer_set_text(s_text_layer, blank_text);
   uint8_t idx = 0;
   // Figure out what index out of the non-empty strings we've selected
   for (uint8_t i = 0; i < settings.idx; i++) {
@@ -184,8 +189,15 @@ static void main_window_load(Window *window) {
   s_layer = layer_create(frame);
   width = frame.size.w;
   height = frame.size.h;
+  s_text_layer =
+      text_layer_create(GRect(width / 8, 90, width - width / 4, height - 90));
+  text_layer_set_background_color(s_text_layer, GColorClear);
+  text_layer_set_font(s_text_layer,
+                      fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  text_layer_set_text_alignment(s_text_layer, GTextAlignmentCenter);
 
   layer_add_child(window_layer, s_layer);
+  layer_add_child(window_layer, text_layer_get_layer(s_text_layer));
   layer_set_update_proc(s_layer, frame_redraw);
   window_set_click_config_provider(window,
                                    (ClickConfigProvider)config_provider);
