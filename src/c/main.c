@@ -167,10 +167,11 @@ static void next(uint8_t jump) {
 }
 
 static void down_click(ClickRecognizerRef recognizer, void *context) {
+  next(1);
+}
+static void up_click(ClickRecognizerRef recognizer, void *context) {
   next((uint8_t)NUM_BUFS - 1);
 }
-
-static void up_click(ClickRecognizerRef recognizer, void *context) { next(1); }
 static void back_click(ClickRecognizerRef recognizer, void *context) {
   save_settings();
   window_stack_pop(true);
