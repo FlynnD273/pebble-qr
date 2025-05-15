@@ -6,7 +6,7 @@
 static void save_settings();
 
 // Needs to be < 1024 to fit 4 strings + 1 more byte for selected index in 4KB
-#define BUF_LEN 4096
+#define BUF_LEN 4092
 
 typedef struct ClaySettings {
   char strings[BUF_LEN];
