@@ -2,19 +2,21 @@
 
 #include "qr.h"
 #include <pebble.h>
+#include <string.h>
 static void save_settings();
 
-#define NUM_BUFS 4
 // Needs to be < 1024 to fit 4 strings + 1 more byte for selected index in 4KB
-#define BUF_LEN 1023
+#define BUF_LEN 4096
 
 typedef struct ClaySettings {
-  char strings[NUM_BUFS][BUF_LEN];
-  uint8_t idx;
-  uint8_t num_strings;
+  char strings[BUF_LEN];
+  size_t displayed_index;
+  size_t num_strings;
 } ClaySettings;
 
 static ClaySettings settings;
+
+static size_t mem_offset = 0;
 
 static Window *s_main_window;
 static Layer *s_layer;
@@ -33,15 +35,18 @@ static char blank_text[] = "";
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 static void default_settings() {
-  for (uint8_t i = 0; i < NUM_BUFS; i++) {
-    strncpy(settings.strings[i], "", BUF_LEN);
-  }
-  strncpy(settings.strings[0], "https://github.com/flynnD273/pebble-qr",
-          BUF_LEN);
-  strncpy(settings.strings[1], "This is the second QR code", BUF_LEN);
-  strncpy(settings.strings[2], "And this, the third", BUF_LEN);
-  settings.idx = 0;
+  memset(settings.strings, 0, BUF_LEN);
   settings.num_strings = 3;
+  char *default_strings[] = {"https://github.com/flynnD273/pebble-qr",
+                             "This is the second QR code",
+                             "And this, the third"};
+  size_t buf_idx = 0;
+  for (uint8_t i = 0; i < settings.num_strings; i++) {
+    size_t len = strlen(default_strings[i]);
+    strncpy(&settings.strings[buf_idx], default_strings[i], len);
+    buf_idx += strlen(default_strings[i]) + 1;
+  }
+  settings.displayed_index = 0;
 }
 
 static void frame_redraw(Layer *layer, GContext *ctx) {
@@ -51,13 +56,6 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     return;
   }
   text_layer_set_text(s_text_layer, blank_text);
-  uint8_t idx = 0;
-  // Figure out what index out of the non-empty strings we've selected
-  for (uint8_t i = 0; i < settings.idx; i++) {
-    if (strlen(settings.strings[i]) > 0) {
-      idx++;
-    }
-  }
 
   uint8_t module_size =
       MIN(width / (qr_code.size + 2), height / (qr_code.size + 2));
@@ -74,10 +72,11 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   // Draw the selection indicator
   if (settings.num_strings > 1) {
 #ifdef PBL_RECT
-    graphics_fill_rect(ctx,
-                       GRect(idx * width / settings.num_strings, 0,
-                             width / settings.num_strings, offset_y / 4),
-                       0, 0);
+    graphics_fill_rect(
+        ctx,
+        GRect(settings.displayed_index * width / settings.num_strings, 0,
+              width / settings.num_strings, offset_y / 4),
+        0, 0);
     graphics_context_set_stroke_width(ctx, 2);
     for (uint8_t i = 1; i < settings.num_strings; i++) {
       graphics_draw_line(
@@ -90,8 +89,10 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     graphics_draw_arc(
         ctx, GRect(thickness / 2, height / 2, width - thickness, 1),
         GOvalScaleModeFillCircle,
-        idx * TRIG_MAX_ANGLE / settings.num_strings / 2 - TRIG_MAX_ANGLE / 4,
-        (idx + 1) * TRIG_MAX_ANGLE / settings.num_strings / 2 -
+        settings.displayed_index * TRIG_MAX_ANGLE / settings.num_strings / 2 -
+            TRIG_MAX_ANGLE / 4,
+        (settings.displayed_index + 1) * TRIG_MAX_ANGLE / settings.num_strings /
+                2 -
             TRIG_MAX_ANGLE / 4);
     graphics_context_set_stroke_width(ctx, 2);
     for (uint8_t i = 0; i <= settings.num_strings; i++) {
@@ -133,11 +134,20 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 
 static void calc_qr() {
   if (settings.num_strings > 0) {
-    uint8_t version = qr_get_version(strlen(settings.strings[settings.idx]));
+    mem_offset = 0;
+    size_t len = strlen(&settings.strings[mem_offset]);
+    for (uint8_t i = 0; i < settings.displayed_index; i++) {
+      if (len == 0) {
+        i--;
+      }
+      mem_offset += len + 1;
+      len = strlen(&settings.strings[mem_offset]);
+    }
+    uint8_t version = qr_get_version(len);
     free(qr_data);
     qr_data = (uint8_t *)calloc(qrcode_getBufferSize(version), 1);
     qrcode_initText(&qr_code, qr_data, version, 0,
-                    settings.strings[settings.idx]);
+                    &settings.strings[mem_offset]);
   } else {
     free(qr_data);
     qr_data = NULL;
@@ -151,16 +161,16 @@ static void calc_qr() {
 /**
  * Select the next non-empty string
  */
-static void next(uint8_t jump) {
+static void next(int8_t jump) {
   if (settings.num_strings > 1) {
-    settings.idx += jump;
-    settings.idx %= NUM_BUFS;
-    for (uint8_t i = 0; i < NUM_BUFS; i++) {
-      if (strlen(settings.strings[settings.idx]) > 0) {
+    settings.displayed_index += jump + settings.num_strings;
+    settings.displayed_index %= settings.num_strings;
+    for (uint8_t i = 0; i < settings.num_strings; i++) {
+      if (strlen(&settings.strings[mem_offset]) > 0) {
         break;
       }
-      settings.idx += jump;
-      settings.idx %= NUM_BUFS;
+      settings.displayed_index += jump + settings.num_strings;
+      settings.displayed_index %= settings.num_strings;
     }
     calc_qr();
   }
@@ -169,9 +179,7 @@ static void next(uint8_t jump) {
 static void down_click(ClickRecognizerRef recognizer, void *context) {
   next(1);
 }
-static void up_click(ClickRecognizerRef recognizer, void *context) {
-  next((uint8_t)NUM_BUFS - 1);
-}
+static void up_click(ClickRecognizerRef recognizer, void *context) { next(-1); }
 static void back_click(ClickRecognizerRef recognizer, void *context) {
   save_settings();
   window_stack_pop(true);
@@ -215,49 +223,26 @@ static void main_window_unload(Window *window) {
  * Load the strings from persistent storage
  */
 static void load_settings() {
-  if (E_DOES_NOT_EXIST == persist_read_data(0, settings.strings[0], 1)) {
+  if (E_DOES_NOT_EXIST == persist_read_data(0, settings.strings, 1)) {
     default_settings();
   } else {
-    bool set_idx = false;
-    uint8_t buf_num = 0;
-    size_t string_byte = 0;
-    uint32_t key = 0;
-    while (buf_num < NUM_BUFS) {
-      if (BUF_LEN - string_byte >= PERSIST_DATA_MAX_LENGTH) {
-        persist_read_data(key, settings.strings[buf_num],
-                          PERSIST_DATA_MAX_LENGTH);
-        if (BUF_LEN - string_byte == PERSIST_DATA_MAX_LENGTH) {
-          buf_num++;
-          string_byte = 0;
-        } else {
-          string_byte += PERSIST_DATA_MAX_LENGTH;
-        }
-        key++;
-      } else {
-        char data[PERSIST_DATA_MAX_LENGTH];
-        persist_read_data(key, data, PERSIST_DATA_MAX_LENGTH);
-        key++;
-        memcpy(&settings.strings[buf_num][string_byte], data,
-               BUF_LEN - string_byte);
-        buf_num++;
-        if (buf_num < NUM_BUFS) {
-          memcpy(settings.strings[buf_num], &data[BUF_LEN - string_byte],
-                 PERSIST_DATA_MAX_LENGTH - (BUF_LEN - string_byte));
-          string_byte = BUF_LEN - string_byte;
-        } else {
-          memcpy(&settings.idx, &data[BUF_LEN - string_byte], 1);
-          set_idx = true;
-        }
-      }
-    }
-    if (!set_idx) {
-      persist_read_data(key, &settings.idx, 1);
+    uint32_t key = 1;
+    size_t buf_idx = 0;
+    persist_read_data(0, &settings.displayed_index, sizeof(size_t));
+    while (buf_idx < BUF_LEN) {
+      persist_read_data(key, &settings.strings[buf_idx],
+                        PERSIST_DATA_MAX_LENGTH);
+      key++;
+      buf_idx += PERSIST_DATA_MAX_LENGTH;
     }
     settings.num_strings = 0;
-    for (uint8_t i = 0; i < NUM_BUFS; i++) {
-      if (strlen(settings.strings[i]) > 0) {
+    buf_idx = 0;
+    while (buf_idx < BUF_LEN) {
+      size_t len = strlen(&settings.strings[buf_idx]);
+      if (len > 0) {
         settings.num_strings++;
       }
+      buf_idx += len + 1;
     }
   }
   calc_qr();
@@ -267,58 +252,43 @@ static void load_settings() {
  * Save the strings to persistent storage
  */
 static void save_settings() {
-  // This is cursed. Please don't do this 😭
-  uint8_t buf_num = 0;
-  size_t string_byte = 0;
-  uint32_t key = 0;
-  bool set_idx = false;
-  while (buf_num < NUM_BUFS) {
-    if (BUF_LEN - string_byte >= PERSIST_DATA_MAX_LENGTH) {
-      persist_write_data(key, settings.strings[buf_num],
-                         PERSIST_DATA_MAX_LENGTH);
-      if (BUF_LEN - string_byte == PERSIST_DATA_MAX_LENGTH) {
-        buf_num++;
-        string_byte = 0;
-      } else {
-        string_byte += PERSIST_DATA_MAX_LENGTH;
-      }
-      key++;
-    } else {
-      char data[PERSIST_DATA_MAX_LENGTH];
-      memcpy(data, &settings.strings[buf_num][string_byte],
-             BUF_LEN - string_byte);
-      buf_num++;
-      if (buf_num < NUM_BUFS) {
-        memcpy(&data[BUF_LEN - string_byte], settings.strings[buf_num],
-               PERSIST_DATA_MAX_LENGTH - (BUF_LEN - string_byte));
-        string_byte = BUF_LEN - string_byte;
-      } else {
-        memcpy(&data[BUF_LEN - string_byte], &settings.idx, 1);
-        set_idx = true;
-      }
-      persist_write_data(key, data, PERSIST_DATA_MAX_LENGTH);
-      key++;
-    }
+  size_t buf_idx = 0;
+  uint32_t key = 1;
+  persist_write_data(0, &settings.displayed_index, 1);
+  while (buf_idx < BUF_LEN) {
+    persist_write_data(key, &settings.strings[buf_idx],
+                       PERSIST_DATA_MAX_LENGTH);
+    buf_idx += PERSIST_DATA_MAX_LENGTH;
+    key++;
   }
-  if (!set_idx) {
-    persist_write_data(key, &settings.idx, 1);
+}
+
+static void get_string_key(DictionaryIterator *iter, uint32_t key,
+                           size_t *buf_idx) {
+  Tuple *string_t = dict_find(iter, key);
+  if (string_t) {
+    size_t len = strlen(string_t->value->cstring);
+    strncpy(&settings.strings[*buf_idx], string_t->value->cstring, len);
+    if (len > 0) {
+      settings.num_strings++;
+    }
+    (*buf_idx) += len + 1;
   }
 }
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   settings.num_strings = 0;
-  for (uint8_t i = 0; i < NUM_BUFS; i++) {
-    Tuple *string_t = dict_find(iter, i);
-    if (string_t) {
-      strncpy(settings.strings[i], string_t->value->cstring, BUF_LEN);
-      if (strlen(settings.strings[i]) > 0) {
-        settings.num_strings++;
-      }
-    }
-  }
+  size_t buf_idx = 0;
+  memset(settings.strings, 0, BUF_LEN);
+  // TODO: Don't hardcode a 4 here, send over 1 string from Clay and make Clay
+  // better
+  get_string_key(iter, MESSAGE_KEY_STRING_0, &buf_idx);
+  get_string_key(iter, MESSAGE_KEY_STRING_1, &buf_idx);
+  get_string_key(iter, MESSAGE_KEY_STRING_2, &buf_idx);
+  get_string_key(iter, MESSAGE_KEY_STRING_3, &buf_idx);
   // Make sure we land on a valid selection
   next(1);
-  next(NUM_BUFS - 1);
+  next(-1);
   save_settings();
   calc_qr();
 }
@@ -333,8 +303,7 @@ static void init() {
                                             });
   window_stack_push(s_main_window, true);
   app_message_register_inbox_received(inbox_received_handler);
-  app_message_open(MIN(BUF_LEN * NUM_BUFS, app_message_inbox_size_maximum()),
-                   0);
+  app_message_open(app_message_inbox_size_maximum(), 0);
 }
 
 int main(void) {
