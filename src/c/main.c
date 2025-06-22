@@ -1,12 +1,12 @@
 #include "qrcode.h"
 
-#include "qr.h"
+#include "qr-version.h"
 #include <pebble.h>
 #include <string.h>
 static void save_settings();
 
-// Needs to be < 1024 to fit 4 strings + 1 more byte for selected index in 4KB
-#define BUF_LEN 4092
+#define BUF_LEN 4096
+#define ALL_ERROR (error < ONE_LENGTH)
 
 typedef struct ClaySettings {
   char strings[BUF_LEN];
@@ -28,7 +28,18 @@ static const QRCode EMPTY_QR;
 static QRCode qr_code;
 static uint8_t *qr_data = NULL;
 static GDrawCommandImage *error_image;
-static char error_text[] = "No QR code to display";
+typedef enum {
+  ALL_EMPTY = 0,
+  ALL_LENGTH,
+  ONE_LENGTH,
+  NONE,
+} ErrorCode;
+static ErrorCode error = NONE;
+static char *error_texts[] = {
+    "No QR code to display",
+    "Length > 4096 chars",
+    "Text was too long",
+};
 static char blank_text[] = "";
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -50,13 +61,12 @@ static void default_settings() {
 }
 
 static void frame_redraw(Layer *layer, GContext *ctx) {
-  if (!qr_data) {
+  // One of the error codes for the state of the app
+  if (ALL_ERROR) {
     gdraw_command_image_draw(ctx, error_image, GPoint(0, 0));
-    text_layer_set_text(s_text_layer, error_text);
+    text_layer_set_text(s_text_layer, error_texts[error]);
     return;
   }
-  text_layer_set_text(s_text_layer, blank_text);
-
   uint8_t module_size =
       MIN(width / (qr_code.size + 2), height / (qr_code.size + 2));
 
@@ -75,13 +85,12 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     graphics_fill_rect(
         ctx,
         GRect(settings.displayed_index * width / settings.num_strings, 0,
-              width / settings.num_strings, offset_y / 4),
+              width / settings.num_strings, 4),
         0, 0);
     graphics_context_set_stroke_width(ctx, 2);
     for (uint8_t i = 1; i < settings.num_strings; i++) {
-      graphics_draw_line(
-          ctx, GPoint(i * width / settings.num_strings, 0),
-          GPoint(i * width / settings.num_strings, offset_y / 4 - 2));
+      graphics_draw_line(ctx, GPoint(i * width / settings.num_strings, 0),
+                         GPoint(i * width / settings.num_strings, 4 - 2));
     }
 #else
     uint8_t thickness = 5;
@@ -109,6 +118,13 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     }
 #endif
   }
+  // One of the error codes for the state of the specific string
+  if (error != NONE) {
+    gdraw_command_image_draw(ctx, error_image, GPoint(0, 0));
+    text_layer_set_text(s_text_layer, error_texts[error]);
+    return;
+  }
+  text_layer_set_text(s_text_layer, blank_text);
 
   // Draw the QR code, reading one byte at a time
   size_t i = 0;
@@ -133,7 +149,15 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 }
 
 static void calc_qr() {
+  if (error == ALL_LENGTH) {
+    // I showed restraint and didn't use a goto statement here 😃
+    if (s_layer) {
+      layer_mark_dirty(s_layer);
+    }
+    return;
+  }
   if (settings.num_strings > 0) {
+    error = NONE;
     mem_offset = 0;
     size_t len = strlen(&settings.strings[mem_offset]);
     for (uint8_t i = 0; i < settings.displayed_index; i++) {
@@ -144,14 +168,22 @@ static void calc_qr() {
       len = strlen(&settings.strings[mem_offset]);
     }
     uint8_t version = qr_get_version(len);
-    free(qr_data);
-    qr_data = (uint8_t *)calloc(qrcode_getBufferSize(version), 1);
-    qrcode_initText(&qr_code, qr_data, version, 0,
-                    &settings.strings[mem_offset]);
+    if (version == 0) {
+      free(qr_data);
+      qr_data = NULL;
+      qr_code = EMPTY_QR;
+      error = ONE_LENGTH;
+    } else {
+      free(qr_data);
+      qr_data = (uint8_t *)calloc(qrcode_getBufferSize(version), 1);
+      qrcode_initText(&qr_code, qr_data, version, 0,
+                      &settings.strings[mem_offset]);
+    }
   } else {
     free(qr_data);
     qr_data = NULL;
     qr_code = EMPTY_QR;
+    error = ALL_EMPTY;
   }
   if (s_layer) {
     layer_mark_dirty(s_layer);
@@ -166,7 +198,7 @@ static void next(int8_t jump) {
     settings.displayed_index += jump + settings.num_strings;
     settings.displayed_index %= settings.num_strings;
     for (uint8_t i = 0; i < settings.num_strings; i++) {
-      if (strlen(&settings.strings[mem_offset]) > 0) {
+      if (mem_offset > BUF_LEN || strlen(&settings.strings[mem_offset]) > 0) {
         break;
       }
       settings.displayed_index += jump + settings.num_strings;
@@ -268,6 +300,9 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
   Tuple *string_t = dict_find(iter, key);
   if (string_t) {
     size_t len = strlen(string_t->value->cstring);
+    if (len > BUF_LEN - *buf_idx) {
+      len = BUF_LEN - *buf_idx;
+    }
     strncpy(&settings.strings[*buf_idx], string_t->value->cstring, len);
     if (len > 0) {
       settings.num_strings++;
@@ -286,6 +321,11 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   get_string_key(iter, MESSAGE_KEY_STRING_1, &buf_idx);
   get_string_key(iter, MESSAGE_KEY_STRING_2, &buf_idx);
   get_string_key(iter, MESSAGE_KEY_STRING_3, &buf_idx);
+  if (settings.strings[BUF_LEN - 1] != '\0') {
+    error = ALL_LENGTH;
+  } else {
+    error = NONE;
+  }
   // Make sure we land on a valid selection
   next(1);
   next(-1);

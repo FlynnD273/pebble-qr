@@ -1,5 +1,5 @@
-#include "qr.h"
 #include "qr-consts.h"
+#include "qr-version.h"
 
 uint8_t qr_get_version(size_t str_len) {
   size_t len = sizeof(qr_sizes) / sizeof(uint16_t);
