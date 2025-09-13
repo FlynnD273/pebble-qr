@@ -74,6 +74,12 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 #ifdef PBL_ROUND
   module_size = width * 707 / 1000 / (qr_code.size + 2);
 #endif
+
+  // Module size is too small for the screen :(
+  if (module_size < 1) {
+    error = ONE_LENGTH;
+  }
+
   uint8_t offset_x = (width - module_size * qr_code.size) / 2;
   uint8_t offset_y = (height - module_size * qr_code.size) / 2;
 
@@ -149,41 +155,44 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 }
 
 static void calc_qr() {
-  if (error == ALL_LENGTH) {
-    // I showed restraint and didn't use a goto statement here 😃
-    if (s_layer) {
-      layer_mark_dirty(s_layer);
-    }
-    return;
-  }
-  if (settings.num_strings > 0) {
-    error = NONE;
-    mem_offset = 0;
-    size_t len = strlen(&settings.strings[mem_offset]);
-    for (uint8_t i = 0; i < settings.displayed_index; i++) {
-      if (len == 0) {
-        i--;
+  if (error != ALL_LENGTH) {
+    if (settings.num_strings > 0) {
+      error = NONE;
+      mem_offset = 0;
+      size_t len = strlen(&settings.strings[mem_offset]);
+      size_t i = 0;
+      while (i < settings.displayed_index || len == 0) {
+        if (len > 0) {
+          i++;
+        }
+        mem_offset += len + 1;
+        len = strlen(&settings.strings[mem_offset]);
       }
-      mem_offset += len + 1;
-      len = strlen(&settings.strings[mem_offset]);
-    }
-    uint8_t version = qr_get_version(len);
-    if (version == 0) {
+      uint8_t version = qr_get_version(len);
+      if (version == 0) {
+        free(qr_data);
+        qr_data = NULL;
+        qr_code = EMPTY_QR;
+        error = ONE_LENGTH;
+      } else {
+        free(qr_data);
+        uint16_t qr_len = qrcode_getBufferSize(version);
+        qr_data = (uint8_t *)calloc(qr_len, 1);
+        if (qr_data == NULL ||
+            qrcode_initText(&qr_code, qr_data, version, 0,
+                            &settings.strings[mem_offset]) != 0) {
+          free(qr_data);
+          qr_data = NULL;
+          qr_code = EMPTY_QR;
+          error = ONE_LENGTH;
+        }
+      }
+    } else {
       free(qr_data);
       qr_data = NULL;
       qr_code = EMPTY_QR;
-      error = ONE_LENGTH;
-    } else {
-      free(qr_data);
-      qr_data = (uint8_t *)calloc(qrcode_getBufferSize(version), 1);
-      qrcode_initText(&qr_code, qr_data, version, 0,
-                      &settings.strings[mem_offset]);
+      error = ALL_EMPTY;
     }
-  } else {
-    free(qr_data);
-    qr_data = NULL;
-    qr_code = EMPTY_QR;
-    error = ALL_EMPTY;
   }
   if (s_layer) {
     layer_mark_dirty(s_layer);
@@ -197,13 +206,6 @@ static void next(int8_t jump) {
   if (settings.num_strings > 1) {
     settings.displayed_index += jump + settings.num_strings;
     settings.displayed_index %= settings.num_strings;
-    for (uint8_t i = 0; i < settings.num_strings; i++) {
-      if (mem_offset > BUF_LEN || strlen(&settings.strings[mem_offset]) > 0) {
-        break;
-      }
-      settings.displayed_index += jump + settings.num_strings;
-      settings.displayed_index %= settings.num_strings;
-    }
     calc_qr();
   }
 }
@@ -299,15 +301,20 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
                            size_t *buf_idx) {
   Tuple *string_t = dict_find(iter, key);
   if (string_t) {
-    size_t len = strlen(string_t->value->cstring);
-    if (len > BUF_LEN - *buf_idx) {
-      len = BUF_LEN - *buf_idx;
+    size_t offset = 0;
+    while (offset < string_t->length) {
+      size_t len = strlen(string_t->value->cstring + offset);
+      if (len > BUF_LEN - *buf_idx) {
+        len = BUF_LEN - *buf_idx;
+      }
+      strncpy(&settings.strings[*buf_idx], string_t->value->cstring + offset,
+              len);
+      if (len > 0) {
+        settings.num_strings++;
+      }
+      (*buf_idx) += len + 1;
+      offset += len + 1;
     }
-    strncpy(&settings.strings[*buf_idx], string_t->value->cstring, len);
-    if (len > 0) {
-      settings.num_strings++;
-    }
-    (*buf_idx) += len + 1;
   }
 }
 
@@ -315,20 +322,13 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   settings.num_strings = 0;
   size_t buf_idx = 0;
   memset(settings.strings, 0, BUF_LEN);
-  // TODO: Don't hardcode a 4 here, send over 1 string from Clay and make Clay
-  // better
   get_string_key(iter, MESSAGE_KEY_STRING_0, &buf_idx);
-  get_string_key(iter, MESSAGE_KEY_STRING_1, &buf_idx);
-  get_string_key(iter, MESSAGE_KEY_STRING_2, &buf_idx);
-  get_string_key(iter, MESSAGE_KEY_STRING_3, &buf_idx);
   if (settings.strings[BUF_LEN - 1] != '\0') {
     error = ALL_LENGTH;
   } else {
     error = NONE;
   }
-  // Make sure we land on a valid selection
-  next(1);
-  next(-1);
+  settings.displayed_index %= settings.num_strings;
   save_settings();
   calc_qr();
 }

@@ -1,0 +1,7 @@
+li {
+	/* display: flex; */
+}
+
+li>button {
+	max-width: "20px";
+}

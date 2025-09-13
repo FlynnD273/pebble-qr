@@ -233,13 +233,12 @@ static uint16_t bb_getBufferSizeBytes(uint32_t bits) {
   return ((bits + 7) / 8);
 }
 
-static void bb_initBuffer(BitBucket *bitBuffer, uint8_t *data,
-                          int32_t capacityBytes) {
+static void bb_initBuffer(BitBucket *bitBuffer, int32_t capacityBytes) {
   bitBuffer->bitOffsetOrWidth = 0;
   bitBuffer->capacityBytes = capacityBytes;
-  bitBuffer->data = data;
+  bitBuffer->data = calloc(capacityBytes, 1);
 
-  memset(data, 0, bitBuffer->capacityBytes);
+  // memset(data, 0, bitBuffer->capacityBytes);
 }
 
 static void bb_initGrid(BitBucket *bitGrid, uint8_t *data, uint8_t size) {
@@ -882,8 +881,10 @@ int8_t qrcode_initBytes(QRCode *qrcode, uint8_t *modules, uint8_t version,
 #endif
 
   struct BitBucket codewords;
-  uint8_t codewordBytes[bb_getBufferSizeBytes(moduleCount)];
-  bb_initBuffer(&codewords, codewordBytes, (int32_t)sizeof(codewordBytes));
+  bb_initBuffer(&codewords, bb_getBufferSizeBytes(moduleCount));
+  if (codewords.data == NULL) {
+    return 1;
+  }
 
   // Place the data code words into the buffer
   int8_t mode = encodeDataCodewords(&codewords, data, length, version);
@@ -911,7 +912,10 @@ int8_t qrcode_initBytes(QRCode *qrcode, uint8_t *modules, uint8_t version,
   bb_initGrid(&modulesGrid, modules, size);
 
   BitBucket isFunctionGrid;
-  uint8_t isFunctionGridBytes[bb_getGridSizeBytes(size)];
+  uint8_t *isFunctionGridBytes = malloc(bb_getGridSizeBytes(size));
+  if (isFunctionGridBytes == NULL) {
+    return 1;
+  }
   bb_initGrid(&isFunctionGrid, isFunctionGridBytes, size);
 
   // Draw function patterns, draw all codewords, do masking
@@ -940,6 +944,8 @@ int8_t qrcode_initBytes(QRCode *qrcode, uint8_t *modules, uint8_t version,
 
   // Apply the final choice of mask
   applyMask(&modulesGrid, &isFunctionGrid, mask);
+  free(isFunctionGrid.data);
+  free(codewords.data);
 
   return 0;
 }
