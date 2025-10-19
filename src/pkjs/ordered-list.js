@@ -59,7 +59,7 @@ module.exports = {
 			switch (parseInt(clay.meta.userData.settings["appv"])) {
 				case 0:
 					if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
-						strings = clay.meta.userData.settings[self.config.messageKey.replace("\0", "\0\0")].split("\0");
+						strings = clay.meta.userData.settings[self.config.messageKey].split("\0").flatMap(x => [x, ""]);
 					}
 					break;
 				case 2:
