@@ -1,7 +1,5 @@
 #include "qrcode.h"
 
-#define DEBUG true
-
 #include "qr-version.h"
 #include <pebble.h>
 #include <stdint.h>
@@ -52,7 +50,7 @@ static char *label;
 
 static void default_settings() {
   memset(settings.strings, 0, BUF_LEN);
-  settings.num_strings = 3;
+  settings.num_strings = 6;
   char *default_strings[] = {"https://github.com/flynnD273/pebble-qr",
                              "Source code",
                              "This is the second QR code",
@@ -95,6 +93,11 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   size_t qr_count = settings.num_strings / 2;
   size_t qr_index = settings.displayed_index / 2;
+#ifdef DEBUG
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Index %d/%d", qr_index, qr_count);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "displayed index %d/%d",
+          settings.displayed_index, settings.num_strings);
+#endif
   // Draw the selection indicator
   if (qr_count > 1) {
 #ifdef PBL_RECT
@@ -206,7 +209,7 @@ static void calc_qr() {
           if (label == NULL) {
             label = calloc(LABEL_LEN, 1);
           }
-          if (strlen(curr_str + strlen(curr_str) + 1) == 0) {
+          if (strcmp(curr_str + strlen(curr_str) + 1, " ") == 0) {
             size_t offset = 0;
             if (starts_with(curr_str, "https://")) {
               offset = 8;
@@ -216,10 +219,10 @@ static void calc_qr() {
             strncpy(label, curr_str + offset, LABEL_LEN - 1);
           } else {
             strncpy(label, curr_str + strlen(curr_str) + 1, LABEL_LEN - 1);
-            if (DEBUG) {
-              APP_LOG(APP_LOG_LEVEL_DEBUG, "label: %s",
-                      curr_str + strlen(curr_str) + 1);
-            }
+#ifdef DEBUG
+            APP_LOG(APP_LOG_LEVEL_DEBUG, "label: %s",
+                    curr_str + strlen(curr_str) + 1);
+#endif
           }
         }
       }
@@ -345,10 +348,10 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
       }
       strncpy(&settings.strings[*buf_idx], string_t->value->cstring + offset,
               len);
-      if (DEBUG) {
-        APP_LOG(APP_LOG_LEVEL_DEBUG, "value %d is: %s",
-                settings.num_strings + 1, &settings.strings[*buf_idx]);
-      }
+#ifdef DEBUG
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "value %d is: %s", settings.num_strings + 1,
+              &settings.strings[*buf_idx]);
+#endif
       if (len > 0) {
         settings.num_strings++;
       }

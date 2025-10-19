@@ -51,18 +51,18 @@ module.exports = {
 		description: ''
 	},
 	initialize: function(_, clay) {
-		const self = this;
-		function migrateSettings(clay) {
+		function migrateSettings(self, clay) {
 			let strings = self.config.defaultValue || [];
-			switch (clay.meta.userData.settings["appv"]) {
+			if (clay.meta.userData.settings === undefined) {
+				return strings;
+			}
+			switch (parseInt(clay.meta.userData.settings["appv"])) {
 				case 0:
-					alert("v0, adding empty labels");
 					if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
 						strings = clay.meta.userData.settings[self.config.messageKey.replace("\0", "\0\0")].split("\0");
 					}
 					break;
 				case 2:
-					alert("v2, parsing as-is");
 					if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
 						strings = clay.meta.userData.settings[self.config.messageKey].split("\0");
 					}
@@ -72,10 +72,11 @@ module.exports = {
 		}
 
 		try {
+			const self = this;
 			let $elem = self.$element;
 			let $list = $elem[0].querySelector('#list');
 
-			let strings = migrateSettings(clay);
+			let strings = migrateSettings(self, clay);
 
 			function updateValue() {
 				const values = Array.from($elem[0].querySelectorAll(".item-text")).map(el => el.value);
@@ -84,7 +85,12 @@ module.exports = {
 				for (let i = 0; i < values.length; i++) {
 					if (values[i] !== "") {
 						strs.push(values[i]);
-						strs.push(labels[i]);
+						if (labels[i] !== "") {
+							strs.push(labels[i]);
+						}
+						else {
+							strs.push(" ");
+						}
 					}
 				}
 				const val = strs.join("\0");
