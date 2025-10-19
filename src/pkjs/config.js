@@ -7,9 +7,9 @@ module.exports = [
 		"type": "orderedList",
 		"messageKey": "STRING_0",
 		"label": "Add, remove, and reorder",
-		"defaultValue": ["https://github.com/flynnD273/pebble-qr",
-			"This is the second QR code",
-			"And this, the third"]
+		"defaultValue": ["https://github.com/flynnD273/pebble-qr", "Source code",
+			"This is the second QR code", "QR 2",
+			"And this, the third", "QR 3"]
 	},
 	{
 		"type": "submit",

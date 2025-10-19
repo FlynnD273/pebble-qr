@@ -1,7 +1,11 @@
 #include "qrcode.h"
 
+#define DEBUG true
+
 #include "qr-version.h"
 #include <pebble.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 static void save_settings();
 
@@ -36,11 +40,12 @@ typedef enum {
 } ErrorCode;
 static ErrorCode error = NONE;
 static char *error_texts[] = {
-    "No QR code to display",
-    "Length > 4096 chars",
-    "Text was too long",
+    "No QR code",
+    "Too many QRs",
+    "Text too long",
 };
-static char blank_text[] = "";
+#define LABEL_LEN 18
+static char *label;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -49,8 +54,11 @@ static void default_settings() {
   memset(settings.strings, 0, BUF_LEN);
   settings.num_strings = 3;
   char *default_strings[] = {"https://github.com/flynnD273/pebble-qr",
+                             "Source code",
                              "This is the second QR code",
-                             "And this, the third"};
+                             "QR 2",
+                             "And this, the third",
+                             "QR 3"};
   size_t buf_idx = 0;
   for (uint8_t i = 0; i < settings.num_strings; i++) {
     size_t len = strlen(default_strings[i]);
@@ -85,18 +93,17 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
 
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorBlack);
+  size_t qr_count = settings.num_strings / 2;
+  size_t qr_index = settings.displayed_index / 2;
   // Draw the selection indicator
-  if (settings.num_strings > 1) {
+  if (qr_count > 1) {
 #ifdef PBL_RECT
     graphics_fill_rect(
-        ctx,
-        GRect(settings.displayed_index * width / settings.num_strings, 0,
-              width / settings.num_strings, 4),
-        0, 0);
+        ctx, GRect(qr_index * width / qr_count, 0, width / qr_count, 4), 0, 0);
     graphics_context_set_stroke_width(ctx, 2);
-    for (uint8_t i = 1; i < settings.num_strings; i++) {
-      graphics_draw_line(ctx, GPoint(i * width / settings.num_strings, 0),
-                         GPoint(i * width / settings.num_strings, 4 - 2));
+    for (uint8_t i = 1; i < qr_count; i++) {
+      graphics_draw_line(ctx, GPoint(i * width / qr_count, 0),
+                         GPoint(i * width / qr_count, 4 - 2));
     }
 #else
     uint8_t thickness = 5;
@@ -104,20 +111,17 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     graphics_draw_arc(
         ctx, GRect(thickness / 2, height / 2, width - thickness, 1),
         GOvalScaleModeFillCircle,
-        settings.displayed_index * TRIG_MAX_ANGLE / settings.num_strings / 2 -
-            TRIG_MAX_ANGLE / 4,
-        (settings.displayed_index + 1) * TRIG_MAX_ANGLE / settings.num_strings /
-                2 -
-            TRIG_MAX_ANGLE / 4);
+        qr_index / 2 * TRIG_MAX_ANGLE / qr_count - TRIG_MAX_ANGLE / 4,
+        (qr_index / 2 + 1) * TRIG_MAX_ANGLE / qr_count - TRIG_MAX_ANGLE / 4);
     graphics_context_set_stroke_width(ctx, 2);
-    for (uint8_t i = 0; i <= settings.num_strings; i++) {
-      int16_t sx = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
-                   width / 2 / TRIG_MAX_RATIO;
-      int16_t sy = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
-                   width / 2 / TRIG_MAX_RATIO;
-      int16_t ex = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+    for (uint8_t i = 0; i <= qr_count; i++) {
+      int16_t sx = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) * width / 2 /
+                   TRIG_MAX_RATIO;
+      int16_t sy = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) * width / 2 /
+                   TRIG_MAX_RATIO;
+      int16_t ex = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) *
                    (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
-      int16_t ey = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / settings.num_strings) *
+      int16_t ey = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) *
                    (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
       graphics_draw_line(ctx, GPoint(sx + width / 2, sy + height / 2),
                          GPoint(ex + width / 2, ey + height / 2));
@@ -130,7 +134,7 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
     text_layer_set_text(s_text_layer, error_texts[error]);
     return;
   }
-  text_layer_set_text(s_text_layer, blank_text);
+  text_layer_set_text(s_text_layer, label);
 
   // Draw the QR code, reading one byte at a time
   size_t i = 0;
@@ -154,12 +158,25 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   }
 }
 
+static bool starts_with(char *string, char *prefix) {
+  size_t len = strlen(prefix);
+  if (strlen(string) < len) {
+    return false;
+  }
+  for (size_t i = 0; i < len; i++) {
+    if (string[i] != prefix[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static void calc_qr() {
   if (error != ALL_LENGTH) {
     if (settings.num_strings > 0) {
       error = NONE;
       mem_offset = 0;
-      size_t len = strlen(&settings.strings[mem_offset]);
+      size_t len = strlen(settings.strings);
       size_t i = 0;
       while (i < settings.displayed_index || len == 0) {
         if (len > 0) {
@@ -178,13 +195,32 @@ static void calc_qr() {
         free(qr_data);
         uint16_t qr_len = qrcode_getBufferSize(version);
         qr_data = (uint8_t *)calloc(qr_len, 1);
+        char *curr_str = &settings.strings[mem_offset];
         if (qr_data == NULL ||
-            qrcode_initText(&qr_code, qr_data, version, 0,
-                            &settings.strings[mem_offset]) != 0) {
+            qrcode_initText(&qr_code, qr_data, version, 0, curr_str) != 0) {
           free(qr_data);
           qr_data = NULL;
           qr_code = EMPTY_QR;
           error = ONE_LENGTH;
+        } else {
+          if (label == NULL) {
+            label = calloc(LABEL_LEN, 1);
+          }
+          if (strlen(curr_str + strlen(curr_str) + 1) == 0) {
+            size_t offset = 0;
+            if (starts_with(curr_str, "https://")) {
+              offset = 8;
+            } else if (starts_with(curr_str, "http://")) {
+              offset = 7;
+            }
+            strncpy(label, curr_str + offset, LABEL_LEN - 1);
+          } else {
+            strncpy(label, curr_str + strlen(curr_str) + 1, LABEL_LEN - 1);
+            if (DEBUG) {
+              APP_LOG(APP_LOG_LEVEL_DEBUG, "label: %s",
+                      curr_str + strlen(curr_str) + 1);
+            }
+          }
         }
       }
     } else {
@@ -211,9 +247,9 @@ static void next(int8_t jump) {
 }
 
 static void down_click(ClickRecognizerRef recognizer, void *context) {
-  next(1);
+  next(2);
 }
-static void up_click(ClickRecognizerRef recognizer, void *context) { next(-1); }
+static void up_click(ClickRecognizerRef recognizer, void *context) { next(-2); }
 static void back_click(ClickRecognizerRef recognizer, void *context) {
   save_settings();
   window_stack_pop(true);
@@ -232,15 +268,14 @@ static void main_window_load(Window *window) {
   s_layer = layer_create(frame);
   width = frame.size.w;
   height = frame.size.h;
-  s_text_layer =
-      text_layer_create(GRect(width / 8, 90, width - width / 4, height - 90));
-  text_layer_set_background_color(s_text_layer, GColorClear);
+  s_text_layer = text_layer_create(GRect(0, height - 26, width, 24));
+  text_layer_set_background_color(s_text_layer, GColorWhite);
   text_layer_set_font(s_text_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_text_layer, GTextAlignmentCenter);
 
-  layer_add_child(window_layer, s_layer);
   layer_add_child(window_layer, text_layer_get_layer(s_text_layer));
+  layer_add_child(window_layer, s_layer);
   layer_set_update_proc(s_layer, frame_redraw);
   window_set_click_config_provider(window,
                                    (ClickConfigProvider)config_provider);
@@ -251,6 +286,7 @@ static void main_window_unload(Window *window) {
   window_destroy(s_main_window);
   gdraw_command_image_destroy(error_image);
   free(qr_data);
+  free(label);
 }
 
 /**
@@ -309,6 +345,10 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
       }
       strncpy(&settings.strings[*buf_idx], string_t->value->cstring + offset,
               len);
+      if (DEBUG) {
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "value %d is: %s",
+                settings.num_strings + 1, &settings.strings[*buf_idx]);
+      }
       if (len > 0) {
         settings.num_strings++;
       }

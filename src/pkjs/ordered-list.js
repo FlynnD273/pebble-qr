@@ -1,4 +1,3 @@
-
 module.exports = {
 	name: 'orderedList',
 	template: `
@@ -14,8 +13,11 @@ module.exports = {
 	<ol id="list"></ol>
 </div>`,
 	style: `
-input {
+.item-text {
 	width: 100%;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: scroll;
 }
 
 .button-container {
@@ -48,29 +50,53 @@ input {
 		label: '',
 		description: ''
 	},
-	initialize: function(minified, clay) {
+	initialize: function(_, clay) {
+		const self = this;
+		function migrateSettings(clay) {
+			let strings = self.config.defaultValue || [];
+			switch (clay.meta.userData.settings["appv"]) {
+				case 0:
+					alert("v0, adding empty labels");
+					if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
+						strings = clay.meta.userData.settings[self.config.messageKey.replace("\0", "\0\0")].split("\0");
+					}
+					break;
+				case 2:
+					alert("v2, parsing as-is");
+					if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
+						strings = clay.meta.userData.settings[self.config.messageKey].split("\0");
+					}
+					break;
+			}
+			return strings;
+		}
+
 		try {
-			let self = this;
 			let $elem = self.$element;
 			let $list = $elem[0].querySelector('#list');
 
-			let strings = self.config.defaultValue || [];
-			if (clay.meta.userData.settings && clay.meta.userData.settings[self.config.messageKey]) {
-				strings = clay.meta.userData.settings[self.config.messageKey].split("\0");
-			}
+			let strings = migrateSettings(clay);
 
 			function updateValue() {
-				const values = Array.from($elem[0].querySelectorAll(".item-text")).map(el => el.value).filter(x => x !== "");
-				const val = values.join("\0");
+				const values = Array.from($elem[0].querySelectorAll(".item-text")).map(el => el.value);
+				const labels = Array.from($elem[0].querySelectorAll(".button-container")).map(el => el.querySelector(".label").value);
+				const strs = [];
+				for (let i = 0; i < values.length; i++) {
+					if (values[i] !== "") {
+						strs.push(values[i]);
+						strs.push(labels[i]);
+					}
+				}
+				const val = strs.join("\0");
 				self.set(val);
 			}
 
-			function createListItem(text = '') {
+			function createListItem(text = '', label = '') {
 				const li = document.createElement('li');
 				li.innerHTML = `
-<input class="item-text" type="text" value="${text}" />
+<textarea class="item-text">${text}</textarea>
 <div class="button-container">
-	<div class="spacer"></div>
+	<input type="text" class="label" value="${label}" placeholder="QR Label"></input>
 	<div class="square move-down">
 		<div>▼</div>
 	</div>
@@ -82,7 +108,20 @@ input {
 	</div>
 </div>
 `;
-				li.querySelector('.item-text').addEventListener('input', () => {
+				const getHeight = t => {
+					return `${Math.max(1.25, t.split("\n").length) * 20}px`;
+				}
+				const itm = li.querySelector('.item-text');
+				itm.style.height = getHeight(text);
+				itm.style.minHeight = getHeight(text);
+				li.querySelector('.item-text').addEventListener('input', evt => {
+					evt.target.style.height = getHeight(evt.target.value);
+					evt.target.style.minHeight = getHeight(evt.target.value);
+					updateValue();
+				});
+
+				li.querySelector('.label').addEventListener('input', evt => {
+					evt.target.value = evt.target.value.substring(0, 18);
 					updateValue();
 				});
 
@@ -111,11 +150,11 @@ input {
 			}
 
 			if (strings.length === 0) {
-				$list.appendChild(createListItem(""));
+				$list.appendChild(createListItem());
 			}
 			else {
-				for (const str of strings) {
-					$list.appendChild(createListItem(str));
+				for (let i = 0; i < strings.length; i += 2) {
+					$list.appendChild(createListItem(strings[i], strings[i + 1]));
 				}
 			}
 
