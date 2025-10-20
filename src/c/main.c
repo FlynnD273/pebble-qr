@@ -1,11 +1,15 @@
 #include "qrcode.h"
 
 #include "qr-version.h"
+
 #include <pebble.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-static void save_settings();
+#ifdef DEBUG
+#define DAPP_LOG(...) APP_LOG(APP_LOG_LEVEL_DEBUG, __VA_ARGS__);
+#else
+#define DAPP_LOG(...)
+#endif
+
+void save_settings();
 
 #define BUF_LEN 4096
 #define ALL_ERROR (error < ONE_LENGTH)
@@ -16,39 +20,39 @@ typedef struct ClaySettings {
   size_t num_strings;
 } ClaySettings;
 
-static ClaySettings settings;
+ClaySettings settings;
 
-static size_t mem_offset = 0;
+size_t mem_offset = 0;
 
-static Window *s_main_window;
-static Layer *s_layer;
-static TextLayer *s_text_layer;
-static int width;
-static int height;
+Window *s_main_window;
+Layer *s_layer;
+TextLayer *s_text_layer;
+int width;
+int height;
 
-static const QRCode EMPTY_QR;
-static QRCode qr_code;
-static uint8_t *qr_data = NULL;
-static GDrawCommandImage *error_image;
+const QRCode EMPTY_QR;
+QRCode qr_code;
+uint8_t *qr_data = NULL;
+GDrawCommandImage *error_image;
 typedef enum {
   ALL_EMPTY = 0,
   ALL_LENGTH,
   ONE_LENGTH,
   NONE,
 } ErrorCode;
-static ErrorCode error = NONE;
-static char *error_texts[] = {
+ErrorCode error = NONE;
+char *error_texts[] = {
     "No QR code",
     "Too many QRs",
     "Text too long",
 };
 #define LABEL_LEN 18
-static char *label;
+char *label;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-static void default_settings() {
+void default_settings() {
   memset(settings.strings, 0, BUF_LEN);
   settings.num_strings = 6;
   char *default_strings[] = {"https://github.com/flynnD273/pebble-qr",
@@ -66,7 +70,7 @@ static void default_settings() {
   settings.displayed_index = 0;
 }
 
-static void frame_redraw(Layer *layer, GContext *ctx) {
+void frame_redraw(Layer *layer, GContext *ctx) {
   // One of the error codes for the state of the app
   if (ALL_ERROR) {
     gdraw_command_image_draw(ctx, error_image, GPoint(0, 0));
@@ -93,11 +97,9 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   size_t qr_count = settings.num_strings / 2;
   size_t qr_index = settings.displayed_index / 2;
-#ifdef DEBUG
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Index %d/%d", qr_index, qr_count);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "displayed index %d/%d",
-          settings.displayed_index, settings.num_strings);
-#endif
+  DAPP_LOG("Index %d/%d", qr_index, qr_count);
+  DAPP_LOG("displayed index %d/%d", settings.displayed_index,
+           settings.num_strings);
   // Draw the selection indicator
   if (qr_count > 1) {
 #ifdef PBL_RECT
@@ -161,7 +163,7 @@ static void frame_redraw(Layer *layer, GContext *ctx) {
   }
 }
 
-static bool starts_with(char *string, char *prefix) {
+bool starts_with(char *string, char *prefix) {
   size_t len = strlen(prefix);
   if (strlen(string) < len) {
     return false;
@@ -174,7 +176,7 @@ static bool starts_with(char *string, char *prefix) {
   return true;
 }
 
-static void calc_qr() {
+void calc_qr() {
   if (error != ALL_LENGTH) {
     if (settings.num_strings > 0) {
       error = NONE;
@@ -199,8 +201,8 @@ static void calc_qr() {
         uint16_t qr_len = qrcode_getBufferSize(version);
         qr_data = (uint8_t *)calloc(qr_len, 1);
         char *curr_str = &settings.strings[mem_offset];
-        if (qr_data == NULL ||
-            qrcode_initText(&qr_code, qr_data, version, 0, curr_str) != 0) {
+        int8_t ret = qrcode_initText(&qr_code, qr_data, version, 0, curr_str);
+        if (qr_data == NULL || ret != 0) {
           free(qr_data);
           qr_data = NULL;
           qr_code = EMPTY_QR;
@@ -219,10 +221,7 @@ static void calc_qr() {
             strncpy(label, curr_str + offset, LABEL_LEN - 1);
           } else {
             strncpy(label, curr_str + strlen(curr_str) + 1, LABEL_LEN - 1);
-#ifdef DEBUG
-            APP_LOG(APP_LOG_LEVEL_DEBUG, "label: %s",
-                    curr_str + strlen(curr_str) + 1);
-#endif
+            DAPP_LOG("label: %s", curr_str + strlen(curr_str) + 1);
           }
         }
       }
@@ -241,7 +240,7 @@ static void calc_qr() {
 /**
  * Select the next non-empty string
  */
-static void next(int8_t jump) {
+void next(int8_t jump) {
   if (settings.num_strings > 1) {
     settings.displayed_index += jump + settings.num_strings;
     settings.displayed_index %= settings.num_strings;
@@ -249,22 +248,20 @@ static void next(int8_t jump) {
   }
 }
 
-static void down_click(ClickRecognizerRef recognizer, void *context) {
-  next(2);
-}
-static void up_click(ClickRecognizerRef recognizer, void *context) { next(-2); }
-static void back_click(ClickRecognizerRef recognizer, void *context) {
+void down_click(ClickRecognizerRef recognizer, void *context) { next(2); }
+void up_click(ClickRecognizerRef recognizer, void *context) { next(-2); }
+void back_click(ClickRecognizerRef recognizer, void *context) {
   save_settings();
   window_stack_pop(true);
 }
 
-static void config_provider(Window *window) {
+void config_provider(Window *window) {
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click);
   window_single_click_subscribe(BUTTON_ID_UP, up_click);
   window_single_click_subscribe(BUTTON_ID_BACK, back_click);
 }
 
-static void main_window_load(Window *window) {
+void main_window_load(Window *window) {
   error_image = gdraw_command_image_create_with_resource(RESOURCE_ID_ERROR);
   Layer *window_layer = window_get_root_layer(window);
   GRect frame = layer_get_bounds(window_layer);
@@ -284,7 +281,7 @@ static void main_window_load(Window *window) {
                                    (ClickConfigProvider)config_provider);
 }
 
-static void main_window_unload(Window *window) {
+void main_window_unload(Window *window) {
   layer_destroy(s_layer);
   window_destroy(s_main_window);
   gdraw_command_image_destroy(error_image);
@@ -295,7 +292,7 @@ static void main_window_unload(Window *window) {
 /**
  * Load the strings from persistent storage
  */
-static void load_settings() {
+void load_settings() {
   if (E_DOES_NOT_EXIST == persist_read_data(0, settings.strings, 1)) {
     default_settings();
   } else {
@@ -324,7 +321,7 @@ static void load_settings() {
 /**
  * Save the strings to persistent storage
  */
-static void save_settings() {
+void save_settings() {
   size_t buf_idx = 0;
   uint32_t key = 1;
   persist_write_data(0, &settings.displayed_index, 1);
@@ -336,8 +333,7 @@ static void save_settings() {
   }
 }
 
-static void get_string_key(DictionaryIterator *iter, uint32_t key,
-                           size_t *buf_idx) {
+void get_string_key(DictionaryIterator *iter, uint32_t key, size_t *buf_idx) {
   Tuple *string_t = dict_find(iter, key);
   if (string_t) {
     size_t offset = 0;
@@ -348,10 +344,8 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
       }
       strncpy(&settings.strings[*buf_idx], string_t->value->cstring + offset,
               len);
-#ifdef DEBUG
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "value %d is: %s", settings.num_strings + 1,
-              &settings.strings[*buf_idx]);
-#endif
+      DAPP_LOG("value %d with length %d is: %s", settings.num_strings + 1, len,
+               &settings.strings[*buf_idx]);
       if (len > 0) {
         settings.num_strings++;
       }
@@ -361,7 +355,8 @@ static void get_string_key(DictionaryIterator *iter, uint32_t key,
   }
 }
 
-static void inbox_received_handler(DictionaryIterator *iter, void *context) {
+void inbox_received_handler(DictionaryIterator *iter, void *context) {
+  DAPP_LOG("RECEIVE MESSAGE");
   settings.num_strings = 0;
   size_t buf_idx = 0;
   memset(settings.strings, 0, BUF_LEN);
@@ -372,11 +367,11 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     error = NONE;
   }
   settings.displayed_index %= settings.num_strings;
-  save_settings();
   calc_qr();
+  save_settings();
 }
 
-static void init() {
+void init() {
   load_settings();
   s_main_window = window_create();
   window_set_background_color(s_main_window, GColorWhite);

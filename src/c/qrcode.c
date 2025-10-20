@@ -786,8 +786,9 @@ static void performErrorCorrection(uint8_t version, uint8_t ecc,
 
   uint8_t shortDataBlockLen = shortBlockLen - blockEccLen;
 
-  uint8_t result[data->capacityBytes];
-  memset(result, 0, sizeof(result));
+  size_t result_len = data->capacityBytes;
+  uint8_t *result = malloc(result_len);
+  memset(result, 0, result_len);
 
   uint8_t coeff[blockEccLen];
   rs_init(blockEccLen, coeff);
@@ -845,6 +846,7 @@ static void performErrorCorrection(uint8_t version, uint8_t ecc,
 
   memcpy(data->data, result, data->capacityBytes);
   data->bitOffsetOrWidth = moduleCount;
+  free(result);
 }
 
 // We store the Format bits tightly packed into a single byte (each of the 4
