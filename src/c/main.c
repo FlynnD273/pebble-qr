@@ -98,38 +98,37 @@ void frame_redraw(Layer *layer, GContext *ctx) {
   size_t qr_count = settings.num_strings / 2;
   size_t qr_index = settings.displayed_index / 2;
   DAPP_LOG("Index %d/%d", qr_index, qr_count);
-  DAPP_LOG("displayed index %d/%d", settings.displayed_index,
-           settings.num_strings);
   // Draw the selection indicator
   if (qr_count > 1) {
-#ifdef PBL_RECT
-    graphics_fill_rect(
-        ctx, GRect(qr_index * width / qr_count, 0, width / qr_count, 4), 0, 0);
-    graphics_context_set_stroke_width(ctx, 2);
-    for (uint8_t i = 1; i < qr_count; i++) {
-      graphics_draw_line(ctx, GPoint(i * width / qr_count, 0),
-                         GPoint(i * width / qr_count, 4 - 2));
-    }
-#else
-    uint8_t thickness = 5;
+    uint8_t thickness = 7;
+#ifdef PBL_ROUND
     graphics_context_set_stroke_width(ctx, thickness);
     graphics_draw_arc(
         ctx, GRect(thickness / 2, height / 2, width - thickness, 1),
         GOvalScaleModeFillCircle,
-        qr_index / 2 * TRIG_MAX_ANGLE / qr_count - TRIG_MAX_ANGLE / 4,
-        (qr_index / 2 + 1) * TRIG_MAX_ANGLE / qr_count - TRIG_MAX_ANGLE / 4);
+        qr_index * TRIG_MAX_ANGLE / 2 / qr_count - TRIG_MAX_ANGLE / 4,
+        (qr_index + 1) * TRIG_MAX_ANGLE / 2 / qr_count - TRIG_MAX_ANGLE / 4);
     graphics_context_set_stroke_width(ctx, 2);
+    thickness += 2;
     for (uint8_t i = 0; i <= qr_count; i++) {
-      int16_t sx = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) * width / 2 /
-                   TRIG_MAX_RATIO;
-      int16_t sy = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) * width / 2 /
-                   TRIG_MAX_RATIO;
-      int16_t ex = cos_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) *
-                   (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
-      int16_t ey = sin_lookup(-i * TRIG_MAX_ANGLE / 2 / qr_count) *
-                   (width / 2 - thickness + 2) / TRIG_MAX_RATIO;
-      graphics_draw_line(ctx, GPoint(sx + width / 2, sy + height / 2),
-                         GPoint(ex + width / 2, ey + height / 2));
+      int32_t angle = i * TRIG_MAX_ANGLE / qr_count / 2 - TRIG_MAX_ANGLE / 4;
+      GPoint outer = gpoint_from_polar(GRect(0, 0, width, height),
+                                       GOvalScaleModeFitCircle, angle);
+      GPoint inner =
+          gpoint_from_polar(GRect(thickness / 2, thickness / 2,
+                                  width - thickness, height - thickness),
+                            GOvalScaleModeFitCircle, angle);
+      graphics_draw_line(ctx, inner, outer);
+    }
+#else
+    graphics_fill_rect(
+        ctx, GRect(qr_index * width / qr_count, 0, width / qr_count, thickness),
+        0, 0);
+    thickness -= 2;
+    graphics_context_set_stroke_width(ctx, 2);
+    for (uint8_t i = 1; i < qr_count; i++) {
+      graphics_draw_line(ctx, GPoint(i * width / qr_count, 0),
+                         GPoint(i * width / qr_count, thickness));
     }
 #endif
   }
@@ -268,10 +267,16 @@ void main_window_load(Window *window) {
   s_layer = layer_create(frame);
   width = frame.size.w;
   height = frame.size.h;
-  s_text_layer = text_layer_create(GRect(0, height - 26, width, 24));
-  text_layer_set_background_color(s_text_layer, GColorWhite);
+#ifdef PBL_ROUND
+  s_text_layer = text_layer_create(GRect(0, height - 34, width, 24));
   text_layer_set_font(s_text_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+#else
+  s_text_layer = text_layer_create(GRect(0, height - 26, width, 24));
+  text_layer_set_font(s_text_layer,
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+#endif
+  text_layer_set_background_color(s_text_layer, GColorWhite);
   text_layer_set_text_alignment(s_text_layer, GTextAlignmentCenter);
 
   layer_add_child(window_layer, text_layer_get_layer(s_text_layer));
