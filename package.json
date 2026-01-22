@@ -1,18 +1,19 @@
 {
-	"name": "QR Display",
+	"name": "QR Code Generator",
 	"author": "Flynn Duniho",
-	"version": "2.8.0",
+	"version": "2.9.0",
 	"keywords": [
-		"pebble-app"
+		"pebble-app",
+		"qr"
 	],
 	"dependencies": {
-		"pebble-clay": "^1.0.1"
+		"@rebble/clay": "^1.0.6"
 	},
 	"pebble": {
 		"capabilities": [
 			"configurable"
 		],
-		"displayName": "QR",
+		"displayName": "QR Generator",
 		"uuid": "28ff10ba-17a6-4ce8-a2d7-012ae0b4b116",
 		"sdkVersion": "3",
 		"enableMultiJS": true,
@@ -26,10 +27,7 @@
 			"watchface": false
 		},
 		"messageKeys": {
-			"STRING_0": 0,
-			"STRING_1": 1,
-			"STRING_2": 2,
-			"STRING_3": 3
+			"STRING_0": 0
 		},
 		"resources": {
 			"media": [

@@ -54,7 +54,10 @@ module.exports = {
 		function migrateSettings(self, clay) {
 			let strings = self.config.defaultValue || [];
 			if (clay.meta.userData.settings === undefined) {
-				return strings;
+				clay.meta.userData.settings = claySettings;
+				if (!clay.meta.userData.settings) {
+					return strings;
+				}
 			}
 			switch (parseInt(clay.meta.userData.settings["appv"])) {
 				case 0:
