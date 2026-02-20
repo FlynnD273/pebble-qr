@@ -1,7 +1,7 @@
 {
 	"name": "QR Code Generator",
 	"author": "Flynn Duniho",
-	"version": "2.9.0",
+	"version": "2.10.0",
 	"keywords": [
 		"pebble-app",
 		"qr"
@@ -21,7 +21,9 @@
 			"aplite",
 			"basalt",
 			"chalk",
-			"diorite"
+			"diorite",
+			"flint",
+			"gabbro"
 		],
 		"watchapp": {
 			"watchface": false
