@@ -1,3 +1,5 @@
+# ⚠️ This repository has migrated to [Codeberg](https://codeberg.org/FlynnD273/pebble-qr)
+
 # QR Generator
 
 <a href="https://apps.rebble.io/en_US/application/67ddcf03d8284900098ed1a4">
